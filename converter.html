@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMB Multi-Tool</title>
+<style>
+body { font-family: "Poppins", sans-serif; background: #f0f2f5; margin:0; padding:0; text-align:center; padding-bottom:70px; /* footer space */ }
+h1 { background:#007bff; color:white; padding:15px 0; margin:0; }
+.container { max-width: 1000px; margin:30px auto; padding:0 15px; }
+.buttons { display:flex; justify-content:center; gap:15px; margin-bottom:20px; flex-wrap:wrap; }
+.tool-button { background:white; border-radius:10px; padding:15px 25px; border:1px solid #ddd; cursor:pointer; transition:.3s; }
+.tool-button:hover { background:#007bff; color:white; transform:translateY(-3px); }
+.tool-section { display:none; background:white; padding:20px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:30px; text-align:left; }
+.tool-section.active { display:block; }
+input, select, button { padding:6px; margin:4px 0; border-radius:6px; border:1px solid #ccc; }
+canvas { max-width:100%; margin-top:15px; border:1px solid #eee; border-radius:6px; }
+.downloads a { display:inline-block; margin:5px; padding:6px 10px; border-radius:6px; background:#007bff; color:white; text-decoration:none; }
+
+/* Fixed footer */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  padding: 15px;
+  background: #007bff;
+  color: white;
+  border-radius: 0 0 12px 12px;
+  z-index: 9999;
+}
+</style>
+</head>
+<body>
+<h1>🛠️ TMB Multi-Tool</h1>
+<div class="container">
+<div class="buttons">
+<button class="tool-button" onclick="showTool('resizer')">Image Resizer</button>
+<button class="tool-button" onclick="showTool('jpg2pdf')">JPG → PDF</button>
+<button class="tool-button" onclick="showTool('pdf2jpg')">PDF → JPG</button>
+<button class="tool-button" onclick="showTool('word2pdf')">Word → PDF</button>
+</div>
+
+<!-- Image Resizer -->
+<div id="resizer" class="tool-section">
+<h2>Image Resizer</h2>
+<input type="file" id="imgFile" accept="image/*"><br>
+<label>Width:</label><input type="number" id="twidth" placeholder="e.g. 800">
+<label>Height:</label><input type="number" id="theight" placeholder="e.g. 600"><br>
+<label>Unit:</label>
+<select id="unit">
+<option value="px">Pixels (px)</option>
+<option value="in">Inch (in)</option>
+<option value="mm">Millimeter (mm)</option>
+</select>
+<label>DPI:</label><input type="number" id="dpi" value="96" style="width:70px"><br>
+<label>Fit Mode:</label>
+<select id="fit">
+<option value="contain">Contain</option>
+<option value="cover">Cover</option>
+<option value="stretch">Stretch</option>
+</select><br>
+<button id="resizeBtn">Resize & Preview</button>
+<canvas id="resCanvas"></canvas>
+<div class="downloads" id="imgDownloads"></div>
+</div>
+
+<!-- JPG to PDF -->
+<div id="jpg2pdf" class="tool-section">
+<h2>JPG → PDF</h2>
+<input type="file" id="jpg2pdf_file" accept="image/*"><br>
+<label>Page Orientation:</label>
+<select id="pdfOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select><br>
+<button id="jpg2pdf_btn">Convert → Download PDF</button>
+<div id="jpg2pdf_msg"></div>
+</div>
+
+<!-- PDF to JPG -->
+<div id="pdf2jpg" class="tool-section">
+<h2>PDF → JPG</h2>
+<input type="file" id="pdf2jpg_file" accept="application/pdf"><br>
+<label>Quality (0.5-1):</label>
+<input type="number" id="pdf2jpg_quality" value="0.9" step="0.1" min="0.5" max="1"><br>
+<button id="pdf2jpg_btn">Convert PDF → JPG</button>
+<div id="pdf2jpg_msg"></div>
+<div class="downloads" id="pdf2jpg_outputs"></div>
+</div>
+
+<!-- Word to PDF -->
+<div id="word2pdf" class="tool-section">
+<h2>Word → PDF</h2>
+<input type="file" id="docx_file" accept=".docx"><br>
+<label>PDF File Name (optional):</label>
+<input type="text" id="docx_title" placeholder="output.pdf"><br>
+<button id="docx2pdf_btn">Convert → Download PDF</button>
+<div id="docx_msg"></div>
+</div>
+
+</div>
+
+<footer>
+All rights reserved © <strong>@Tanvir Mohsin Bappy</strong>
+</footer>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+
+<script>
+// Show tool section
+function showTool(id){
+  document.querySelectorAll('.tool-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// Image Resizer
+const imgFile = document.getElementById('imgFile');
+const tw = document.getElementById('twidth');
+const th = document.getElementById('theight');
+const unit = document.getElementById('unit');
+const fitEl = document.getElementById('fit');
+const dpiEl = document.getElementById('dpi');
+const canvas = document.getElementById('resCanvas');
+const ctx = canvas.getContext('2d');
+const imgDownloads = document.getElementById('imgDownloads');
+let loadedImage = null;
+imgFile.addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    const im = new Image();
+    im.onload = ()=> { loadedImage=im; canvas.width=im.naturalWidth; canvas.height=im.naturalHeight; ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(im,0,0); };
+    im.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
+function toPx(value, unitVal, dpi){ if(unitVal==='px') return value; if(unitVal==='in') return value*dpi; if(unitVal==='mm') return value/25.4*dpi; }
+document.getElementById('resizeBtn').addEventListener('click', ()=>{
+  if(!loadedImage){ alert('Upload image first'); return; }
+  const dpi=parseFloat(dpiEl.value)||96;
+  const targetW=parseFloat(tw.value); const targetH=parseFloat(th.value);
+  let pxW = targetW?Math.round(toPx(targetW, unit.value, dpi)):null;
+  let pxH = targetH?Math.round(toPx(targetH, unit.value, dpi)):null;
+  const srcW = loadedImage.naturalWidth; const srcH = loadedImage.naturalHeight;
+  let destW = pxW||Math.round(srcW*(pxH/srcH)); let destH = pxH||Math.round(srcH*(pxW/srcW));
+  const mode = fitEl.value;
+  if(mode==='contain'){ const scale=Math.min(destW/srcW,destH/srcH); destW=Math.round(srcW*scale); destH=Math.round(srcH*scale); canvas.width=destW; canvas.height=destH; ctx.clearRect(0,0,destW,destH); ctx.drawImage(loadedImage,0,0,srcW,srcH,0,0,destW,destH); }
+  else if(mode==='cover'){ const scale=Math.max(destW/srcW,destH/srcH); const drawW=Math.round(srcW*scale); const drawH=Math.round(srcH*scale); const tmp=document.createElement('canvas'); tmp.width=drawW; tmp.height=drawH; tmp.getContext('2d').drawImage(loadedImage,0,0,drawW,drawH); const sx=Math.round((drawW-destW)/2); const sy=Math.round((drawH-destH)/2); canvas.width=destW; canvas.height=destH; ctx.clearRect(0,0,destW,destH); ctx.drawImage(tmp,sx,sy,destW,destH,0,0,destW,destH); }
+  else{ canvas.width=destW; canvas.height=destH; ctx.clearRect(0,0,destW,destH); ctx.drawImage(loadedImage,0,0,srcW,srcH,0,0,destW,destH); }
+  imgDownloads.innerHTML='';
+  canvas.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='resized.png'; a.textContent='Download PNG'; imgDownloads.appendChild(a); },'image/png');
+  canvas.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='resized.jpg'; a.textContent='Download JPG'; imgDownloads.appendChild(a); },'image/jpeg',0.92);
+});
+
+// JPG -> PDF
+const { jsPDF } = window.jspdf;
+document.getElementById('jpg2pdf_btn').addEventListener('click', async ()=>{
+  const f=document.getElementById('jpg2pdf_file').files[0];
+  if(!f){ alert('Upload JPG'); return; }
+  const dataUrl=await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(f); });
+  const img=new Image(); img.src=dataUrl;
+  img.onload=()=>{ const dpi=96; const wPt=img.naturalWidth*72/dpi; const hPt=img.naturalHeight*72/dpi; const orient=document.getElementById('pdfOrient').value; const doc=new jsPDF({unit:'pt',format:[wPt,hPt],orientation:orient}); doc.addImage(img,'JPEG',0,0,wPt,hPt); doc.save((f.name||'image')+'.pdf'); document.getElementById('jpg2pdf_msg').textContent='PDF তৈরি হয়েছে ✓'; setTimeout(()=>document.getElementById('jpg2pdf_msg').textContent='',2000); };
+});
+
+// PDF -> JPG
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+document.getElementById('pdf2jpg_btn').addEventListener('click', async ()=>{
+  const f=document.getElementById('pdf2jpg_file').files[0];
+  if(!f){ alert('Upload PDF'); return; }
+  const quality=parseFloat(document.getElementById('pdf2jpg_quality').value)||0.9;
+  const arrayBuffer=await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsArrayBuffer(f); });
+  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+  const outDiv=document.getElementById('pdf2jpg_outputs'); outDiv.innerHTML='';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const viewport=page.getViewport({scale:2});
+    const tmp=document.createElement('canvas'); tmp.width=Math.floor(viewport.width); tmp.height=Math.floor(viewport.height);
+    await page.render({canvasContext:tmp.getContext('2d'),viewport}).promise;
+    await new Promise(res=>tmp.toBlob(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`page-${i}.jpg`; a.textContent=`Download page ${i}`; outDiv.appendChild(a); res(); },'image/jpeg',quality));
+  }
+  document.getElementById('pdf2jpg_msg').textContent='Conversion Done ✓';
+  setTimeout(()=>document.getElementById('pdf2jpg_msg').textContent='',2000);
+});
+
+// Word -> PDF
+document.getElementById('docx2pdf_btn').addEventListener('click', async ()=>{
+  const f=document.getElementById('docx_file').files[0]; if(!f){ alert('Upload DOCX'); return; }
+  const outName=document.getElementById('docx_title').value||'output.pdf';
+  const arrayBuffer=await f.arrayBuffer();
+  const result=await mammoth.extractRawText({arrayBuffer});
+  const doc=new jsPDF();
+  const lines=result.value.split('\n');
+  let y=20; const pageHeight=doc.internal.pageSize.height;
+  lines.forEach(line=>{ if(y>pageHeight-20){ doc.addPage(); y=20;} doc.text(20,y,line); y+=10; });
+  doc.save(outName);
+  document.getElementById('docx_msg').textContent='PDF তৈরি হয়েছে ✓';
+  setTimeout(()=>document.getElementById('docx_msg').textContent='',2000);
+});
+</script>
+</body>
+</html>
